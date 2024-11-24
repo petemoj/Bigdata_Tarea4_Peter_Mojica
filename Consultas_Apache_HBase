@@ -1,0 +1,112 @@
+// 2. Operaciones realizadas en Hbase.
+	
+wget https://www.datos.gov.co/api/views/7gj8-j6i3/rows.csv --no-check-certificate
+
+import happybase
+import pandas as pd
+from datetime import datetime
+
+try:
+    # 1. Establecer conexión con HBase
+    connection = happybase.Connection('localhost')
+    print("Conexión establecida con HBase")
+
+    # 2. Crear la tabla con las familias de columnas para los peajes
+    table_name = 'peajes_tarifas'
+    families = {
+        'basic': dict(),    # Información básica del peaje (ID, Nombre, Categoría)
+        'pricing': dict()   # Información sobre las tarifas y fecha de último cambio
+    }
+
+    # Eliminar la tabla si ya existe
+    if table_name.encode() in connection.tables():
+        print(f"Eliminando tabla existente - {table_name}")
+        connection.delete_table(table_name, disable=True)
+
+    # Crear nueva tabla
+    connection.create_table(table_name, families)
+    table = connection.table(table_name)
+    print("Tabla 'peajes_tarifas' creada exitosamente")
+
+    # 3. Cargar datos desde el archivo CSV
+    # Suponemos que tienes un CSV con las columnas: IdPeaje, Peaje, UltimoFechaCambioPeaje, IdCategoriaTarifa, Valor
+    peaje_data = pd.read_csv('rows.csv ')
+
+    # Iterar sobre el DataFrame y cargar los datos en HBase
+    for index, row in peaje_data.iterrows():
+        row_key = f'peaje_{row["IdPeaje"]}'.encode()  # Generar row key único para cada peaje
+
+        # Organizar los datos en familias de columnas
+        data = {
+            b'basic:IdPeaje': str(row['IdPeaje']).encode(),
+            b'basic:Peaje': str(row['Peaje']).encode(),
+            b'basic:IdCategoriaTarifa': str(row['IdCategoriaTarifa']).encode(),
+            
+            b'pricing:Valor': str(row['Valor']).encode(),
+            b'pricing:UltimoFechaCambioPeaje': str(row['UltimoFechaCambioPeaje']).encode(),
+        }
+        
+        # Insertar los datos en la tabla
+        table.put(row_key, data)
+
+    print("Datos cargados exitosamente")
+
+    # 4. Consultas y Análisis de Datos
+    # 4.1. Consultar los primeros 5 peajes
+    print("\n=== Primeros 5 peajes en la base de datos ===")
+    count = 0
+    for key, data in table.scan():
+        if count < 5:  # Limitamos a 5 para el ejemplo
+            print(f"\nID Peaje: {key.decode()}")
+            print(f"Peaje: {data[b'basic:Peaje'].decode()}")
+            print(f"Categoría: {data[b'basic:IdCategoriaTarifa'].decode()}")
+            print(f"Valor: {data[b'pricing:Valor'].decode()}")
+            print(f"Último Cambio: {data[b'pricing:UltimoFechaCambioPeaje'].decode()}")
+            count += 1
+
+    # 4.2. Filtrar peajes con un valor superior a un cierto umbral
+    umbral_valor = 5000  # Este umbral lo puedes ajustar según sea necesario
+    print(f"\n=== Peajes con valor superior a {umbral_valor} ===")
+    for key, data in table.scan():
+        if float(data[b'pricing:Valor'].decode()) > umbral_valor:
+            print(f"\nID Peaje: {key.decode()}")
+            print(f"Peaje: {data[b'basic:Peaje'].decode()}")
+            print(f"Valor: {data[b'pricing:Valor'].decode()}")
+            print(f"Último Cambio: {data[b'pricing:UltimoFechaCambioPeaje'].decode()}")
+
+    # 4.3. Análisis de peajes por categoría de tarifa
+    print("\n=== Peajes por categoría de tarifa ===")
+    categoria_stats = {}
+    for key, data in table.scan():
+        categoria = data[b'basic:IdCategoriaTarifa'].decode()
+        categoria_stats[categoria] = categoria_stats.get(categoria, 0) + 1
+
+    for categoria, count in categoria_stats.items():
+        print(f"{categoria}: {count} peajes")
+    # 4.4. Análisis de tarifas promedio por tipo de peaje
+    print("\n=== Promedio de tarifas por tipo de peaje ===")
+    peaje_prices = {}
+    peaje_counts = {}
+
+    for key, data in table.scan():
+        peaje = data[b'basic:Peaje'].decode()
+        valor = float(data[b'pricing:Valor'].decode())
+        peaje_prices[peaje] = peaje_prices.get(peaje, 0) + valor
+        peaje_counts[peaje] = peaje_counts.get(peaje, 0) + 1
+
+    for peaje in peaje_prices:
+        avg_price = peaje_prices[peaje] / peaje_counts[peaje]
+        print(f"{peaje}: {avg_price:.2f}")
+
+    # 4.5. Ejemplo de actualización del valor de un peaje
+    peaje_to_update = 'peaje_1'  # Supongamos que el ID del peaje es 1
+    new_valor = 6000
+    table.put(peaje_to_update.encode(), {b'pricing:Valor': str(new_valor).encode()})
+    print(f"\nValor actualizado para el Peaje ID: {peaje_to_update}")
+
+except Exception as e:
+    print(f"Error: {str(e)}")
+
+finally:
+    # 5. Cerrar la conexión
+    connection.close()
