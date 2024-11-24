@@ -1,0 +1,114 @@
+// 1. Consultas Básicas
+// Insertar un documento en la colección "suministros".
+Código: db.suministros.insertOne({
+  item: "Pencil",
+  type: "Stationery",
+  quantity: 150,
+  price: 0.99,
+  supplier: "ABC Suministros"
+});
+
+// Seleccionar documentos con una condición
+Código:  db.suministros.find({ type: " stationary" });
+
+// Actualizar un solo documento (por ejemplo, cambiar la cantidad de un artículo)
+Código: db.suministros.updateOne(
+  { item: "Pencil" }, // Filtro
+  { $set: { quantity: 200 } } // Actualización
+);
+
+// Actualizar varios documentos (por ejemplo, cambiar el proveedor)
+Código: db.suministros.updateMany(
+  { type: "Stationery" }, // Filtro
+  { $set: { supplier: "XYZ Suministros" } } // Actualización
+);
+
+// Eliminar un solo documento
+Código: db.suministros.deleteOne({ item: "Pencil" });
+
+// Eliminar varios documentos
+Código: db.suministros.deleteMany({ type: "Stationery" });
+ 
+// 2. Consultas con filtros y operadores.
+// Buscar ventas realizadas en una fecha específica:
+Código: db.suministros.find({
+  saleDate: ISODate("2015-03-23T21:06:49.506+00:00")
+
+// Buscar ventas realizadas después de una fecha específica:
+db.suministros.find({
+  saleDate: { $gt: ISODate("2017-01-01T00:00:00.000+00:00") }
+});
+ 
+// Buscar ventas con una cantidad de artículos mayor a un valor determinado (por ejemplo, más de 2 artículos):
+db.suministros.find({
+  "items.quantity": { $gt: 2 }
+});
+
+// Buscar ventas realizadas "Online" en la tienda de San Diego":
+db.suministros.find({
+  purchaseMethod: "Online",
+  "storeLocation": "San Diego"
+ 
+// 3. Consultas de Agregación
+// Contar el número total de ventas por ubicación de tienda (storeLocation):
+db.suministros.aggregate([
+  { $group: { _id: "$storeLocation", totalSales: { $sum: 1 } } }
+]);
+ 
+// Calcular la venta total por cada tienda (sumando el precio total de todos los artículos):
+db.suministros.aggregate([
+  { $unwind: "$items" }, // Desglosar los artículos para procesarlos individualmente
+  { $group: {
+      _id: "$storeLocation", // Agrupar por ubicación de tienda
+      totalSalesValue: { $sum: { $multiply: ["$items.quantity", "$items.price"] } } // Sumar precio total de los artículos
+  }}
+]);
+ 
+// Promedio del valor de las compras de los clientes:
+db.suministros.aggregate([
+  { $unwind: "$items" },
+  { $group: {
+      _id: "$customer.customerId",
+      totalSpent: { $sum: { $multiply: ["$items.quantity", "$items.price"] } },
+      averageSpent: { $avg: { $multiply: ["$items.quantity", "$items.price"] } }
+  }}
+]);
+ 
+// Buscar ventas que usaron un cupón y calcular el total gastado en cada transacción:
+db.suministros.aggregate([
+  { $match: { couponUsed: true } },
+  { $unwind: "$items" },
+  { $group: {
+      _id: "$_id", // Usar el _id de la venta para identificarla
+      totalSpent: { $sum: { $multiply: ["$items.quantity", "$items.price"] } }
+  }}
+]);
+
+// Ventas realizadas cada mes:
+db.suministros.aggregate([
+  {
+    $project: { 
+      year: { $year: "$saleDate" },
+      month: { $month: "$saleDate" },
+      day: { $dayOfMonth: "$saleDate" },
+      totalSpent: {
+        $sum: {
+          $map: {
+            input: "$items", // Itera sobre el arreglo items
+            as: "item", // Cada elemento dentro del arreglo se denomina "item"
+            in: { $multiply: ["$$item.quantity", "$$item.price"] } // Multiplica quantity por price para cada item
+          }
+        }
+    }
+  }},
+  { 
+    $group: {
+      _id: { year: "$year", month: "$month" }, 
+      totalSales: { $sum: 1 },
+      totalRevenue: { $sum: "$totalSpent" }
+    }
+  },
+  { 
+    $sort: { "_id.year": 1, "_id.month": 1 } 
+  }
+]);
