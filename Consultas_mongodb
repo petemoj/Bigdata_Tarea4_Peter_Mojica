@@ -1,6 +1,6 @@
 // 1. Consultas Básicas
 // Insertar un documento en la colección "suministros".
-Código: db.suministros.insertOne({
+db.suministros.insertOne({
   item: "Pencil",
   type: "Stationery",
   quantity: 150,
@@ -9,7 +9,7 @@ Código: db.suministros.insertOne({
 });
 
 // Seleccionar documentos con una condición
-Código:  db.suministros.find({ type: " stationary" });
+ db.suministros.find({ type: " stationary" });
 
 // Actualizar un solo documento (por ejemplo, cambiar la cantidad de un artículo)
 Código: db.suministros.updateOne(
@@ -18,20 +18,20 @@ Código: db.suministros.updateOne(
 );
 
 // Actualizar varios documentos (por ejemplo, cambiar el proveedor)
-Código: db.suministros.updateMany(
+db.suministros.updateMany(
   { type: "Stationery" }, // Filtro
   { $set: { supplier: "XYZ Suministros" } } // Actualización
 );
 
 // Eliminar un solo documento
-Código: db.suministros.deleteOne({ item: "Pencil" });
+db.suministros.deleteOne({ item: "Pencil" });
 
 // Eliminar varios documentos
-Código: db.suministros.deleteMany({ type: "Stationery" });
+db.suministros.deleteMany({ type: "Stationery" });
  
 // 2. Consultas con filtros y operadores.
 // Buscar ventas realizadas en una fecha específica:
-Código: db.suministros.find({
+db.suministros.find({
   saleDate: ISODate("2015-03-23T21:06:49.506+00:00")
 
 // Buscar ventas realizadas después de una fecha específica:
